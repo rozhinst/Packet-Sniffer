@@ -3,8 +3,8 @@ import struct
 import textwrap
 from matplotlib import pyplot as plt
 
-labels = 'TCP','UDP','ICMP'
-explode = (0,0,0)
+labels = 'TCP','UDP','ICMP','ARP'
+explode = (0,0,0,0)
 fig1,ax1 = plt.subplots()
 
 global icmp_count 
@@ -17,6 +17,8 @@ global dns_count
 dns_count=0
 global http_count
 http_count = 0
+global arp_count
+arp_count = 0
 
 global min_packet_size 
 min_packet_size=  1000000000000000000000000000000000000000000000000000000000000000000000
@@ -63,7 +65,7 @@ def capture(conn):
 	global udp_count
 	global tcp_count
 	global icmp_count
-	while True:
+	while True: 
 		raw_data, addr = conn.recvfrom(65536)
 		dest_mac, src_mac, eth_proto, data = ethernet_frame(raw_data)
 		print('\nEthernet Frame:')
@@ -103,6 +105,12 @@ def capture(conn):
 			else:
 				print('\t - Data:')
 				print(format_string('\t\t ', data))
+		elif eth_proto == 14:
+			hardware_type,proto_type,sender_h_addr,sender_proto_addr,target_h_addr,target_proto_addr = arp_packet(data)
+			print('\t - ARP')
+			print('\t\t - Hardware Type: {}, Protocol Type: {}'.format(hardware_type, proto_type))
+			print('\t\t - Sender Hardware Address: {}, Sender Protocol Address: {}'.format(sender_h_addr,sender_proto_addr))
+			print('\t\t - Target Hardwar Address: {}, Target Protocol Address: {}'.format(target_h_addr, target_proto_addr))
 		else:
         		print('Data: ')
 	        	print(format_string('\t ', data))
@@ -141,6 +149,14 @@ def ipv4_packet(data):
 def ipv4(addr):
     return '.'.join(map(str, addr))
 
+def arp_packet(data):
+	global arp_count
+	
+	arp_count += 1
+	hardware_type,proto_type,sender_h_addr,sender_proto_addr,target_h_addr,target_proto_addr = struct.unpack('! 2s 2s 4x 4s 4s 4s 4s ', data)
+
+	return hardware_type,proto_type,sender_h_addr,sender_proto_addr,target_h_addr,target_proto_addr
+
 
 def icmp_packet(data):
     icmp_type, code, checksum = struct.unpack('! B B H', data[:4])
@@ -161,7 +177,7 @@ def tcp_packet(data):
 	flag_rst = (offset_reserved_flags & 4) >> 2
 
 	if src_port == 53 or dest_port == 53:
-		dns_cout += 1
+		dns_count += 1
 	if src_port == 80 or dest_port == 80:
 		http_count += 1
 
@@ -192,7 +208,7 @@ def udp_packet(data):
 
 
 	if src_port == 53 or dest_port == 53:
-		dns_cout += 1
+		dns_count += 1
 	if src_port == 80 or dest_port == 80:
 		http_count += 1
 
@@ -218,7 +234,7 @@ def format_string(pref, string, size=80):
     return '\n'.join([pref + line for line in textwrap.wrap(string, size)])
 
 def show_graf(total_size):
-	sizes = [tcp_count/total_size *100,udp_count/total_size *100,icmp_count/total_size *100]
+	sizes = [tcp_count/total_size *100,udp_count/total_size *100,icmp_count/total_size *100,arp_count/total_size *100]
 	ax1.pie(sizes, explode=explode,labels=labels,autopct='%1.1f%%',shadow=True, startangle=90)
 	ax1.axis('equal')
 	plt.show()
@@ -239,6 +255,8 @@ def write_report():
 
 	outF.write(
 	    "...........................................................................\n")
+	outF.write("ARP Count: " + str(arp_count))
+	outF.write("\n")
 	outF.write("TCP Count: " + str(tcp_count))
 	outF.write("\n")
 	outF.write("UDP Count: " + str(udp_count))
